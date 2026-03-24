@@ -1,0 +1,17 @@
+# Angular / Node
+node_modules/
+dist/
+.angular/
+.cache/
+
+# Editor
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# OS
+.DS_Store
+Thumbs.db
