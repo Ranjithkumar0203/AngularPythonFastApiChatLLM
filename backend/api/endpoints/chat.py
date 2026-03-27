@@ -5,9 +5,14 @@ from fastapi.responses import StreamingResponse
 from ollama import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.api.schemas import ChatRequest, ChatResponse, MultiTurnRequest
-from backend.db.database import get_db_session
-from backend.db.models import ChatMessage
+try:
+    from ..schemas import ChatRequest, ChatResponse, MultiTurnRequest
+    from ...db.database import get_db_session
+    from ...db.models import ChatMessage
+except ImportError:
+    from api.schemas import ChatRequest, ChatResponse, MultiTurnRequest
+    from db.database import get_db_session
+    from db.models import ChatMessage
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 ollama = AsyncClient()

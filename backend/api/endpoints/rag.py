@@ -3,10 +3,16 @@ from ollama import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.api.schemas import RagIngestRequest, RagQueryRequest, RagQueryResponse
-from backend.db.database import get_db_session
-from backend.db.models import RagChunk
-from backend.services.rag import Candidate, cosine_similarity, mmr_select
+try:
+    from ..schemas import RagIngestRequest, RagQueryRequest, RagQueryResponse
+    from ...db.database import get_db_session
+    from ...db.models import RagChunk
+    from ...services.rag import Candidate, cosine_similarity, mmr_select
+except ImportError:
+    from api.schemas import RagIngestRequest, RagQueryRequest, RagQueryResponse
+    from db.database import get_db_session
+    from db.models import RagChunk
+    from services.rag import Candidate, cosine_similarity, mmr_select
 
 router = APIRouter(prefix="/rag", tags=["rag"])
 ollama = AsyncClient()
