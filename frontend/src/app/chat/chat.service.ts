@@ -77,13 +77,30 @@ export class ChatService {
         }
         const reader  = res.body.getReader();
         const decoder = new TextDecoder();
+        let buffer = '';
 
         while (true) {
           const { value, done } = await reader.read();
-          if (done) { onDone(); break; }
+          if (done) {
+            // Flush any remaining complete event when stream closes.
+            if (buffer.trim().length > 0) {
+              const frame = buffer.trim();
+              if (frame.startsWith('data: ')) {
+                const data = JSON.parse(frame.slice(6)) as { token?: string; error?: string };
+                if (data.error) { onError(data.error); return; }
+                if (data.token) onToken(data.token);
+              }
+            }
+            onDone();
+            break;
+          }
 
-          const lines = decoder.decode(value, { stream: true }).split('\n');
-          for (const line of lines) {
+          buffer += decoder.decode(value, { stream: true });
+          const frames = buffer.split('\n\n');
+          buffer = frames.pop() ?? '';
+
+          for (const frame of frames) {
+            const line = frame.trim();
             if (!line.startsWith('data: ')) continue;
             const data = JSON.parse(line.slice(6)) as { token?: string; error?: string };
             if (data.error) { onError(data.error); return; }
