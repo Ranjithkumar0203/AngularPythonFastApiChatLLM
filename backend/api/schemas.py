@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -13,6 +13,16 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     response: str
     model: str
+
+
+class Message(BaseModel):
+    role: Literal["system", "user", "assistant"]
+    content: str
+
+
+class MultiTurnRequest(BaseModel):
+    messages: list[Message]
+    model: str = "qwen2.5:7b"
 
 
 class RagIngestRequest(BaseModel):

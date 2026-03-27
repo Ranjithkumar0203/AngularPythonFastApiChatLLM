@@ -28,5 +28,5 @@ class RagChunk(Base):
     source: Mapped[str] = mapped_column(String(256), index=True)
     content: Mapped[str] = mapped_column(Text)
     embedding: Mapped[list[float]] = mapped_column(ARRAY(Float))
-    metadata: Mapped[dict] = mapped_column(JSONB, default=dict)
+    meta: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)

@@ -5,7 +5,7 @@ from fastapi.responses import StreamingResponse
 from ollama import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.api.schemas import ChatRequest, ChatResponse
+from backend.api.schemas import ChatRequest, ChatResponse, MultiTurnRequest
 from backend.db.database import get_db_session
 from backend.db.models import ChatMessage
 
@@ -92,3 +92,15 @@ async def chat_stream(req: ChatRequest, db: AsyncSession = Depends(get_db_sessio
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
     return StreamingResponse(token_generator(), media_type="text/event-stream")
+
+
+@router.post("/multi", response_model=ChatResponse)
+async def chat_multi(req: MultiTurnRequest):
+    try:
+        result = await ollama.chat(
+            model=req.model,
+            messages=[message.model_dump() for message in req.messages],
+        )
+        return ChatResponse(response=result.message.content, model=req.model)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))

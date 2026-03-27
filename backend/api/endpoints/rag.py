@@ -22,7 +22,7 @@ async def ingest_document(req: RagIngestRequest, db: AsyncSession = Depends(get_
             source=req.source,
             content=req.content,
             embedding=vector,
-            metadata=req.metadata,
+            meta=req.metadata,
         )
         db.add(row)
         await db.commit()
