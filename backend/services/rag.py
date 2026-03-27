@@ -1,0 +1,66 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from math import sqrt
+
+
+@dataclass
+class Candidate:
+    id: str
+    source: str
+    content: str
+    score: float
+    embedding: list[float]
+
+
+def cosine_similarity(a: list[float], b: list[float]) -> float:
+    if not a or not b:
+        return 0.0
+
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = sqrt(sum(x * x for x in a))
+    norm_b = sqrt(sum(y * y for y in b))
+
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+
+    return dot / (norm_a * norm_b)
+
+
+def mmr_select(
+    query_embedding: list[float],
+    candidates: list[Candidate],
+    k: int = 4,
+    lambda_param: float = 0.7,
+) -> list[Candidate]:
+    if not candidates:
+        return []
+
+    selected: list[Candidate] = []
+    remaining = candidates.copy()
+
+    while remaining and len(selected) < k:
+        best = None
+        best_score = float("-inf")
+
+        for candidate in remaining:
+            relevance = cosine_similarity(query_embedding, candidate.embedding)
+            diversity_penalty = 0.0
+
+            if selected:
+                diversity_penalty = max(
+                    cosine_similarity(candidate.embedding, picked.embedding) for picked in selected
+                )
+
+            mmr_score = (lambda_param * relevance) - ((1 - lambda_param) * diversity_penalty)
+            if mmr_score > best_score:
+                best_score = mmr_score
+                best = candidate
+
+        if best is None:
+            break
+
+        selected.append(best)
+        remaining = [item for item in remaining if item.id != best.id]
+
+    return selected
