@@ -24,8 +24,7 @@ export class ChatComponent implements AfterViewChecked {
   // ── Local UI signals ───────────────────────────────────────────────────────
   prompt     = signal('');
   model      = signal('qwen2.5:7b');
-  useStream  = signal(true);
-  useMulti   = signal(false);
+  mode       = signal<'stream' | 'multi' | 'single'>('stream');
   errorMsg   = signal('');
 
   // Computed helpers exposed to template
@@ -48,7 +47,7 @@ export class ChatComponent implements AfterViewChecked {
     this.chat.addMessage('user', text);
     this.prompt.set('');
 
-    if (this.useStream()) {
+    if (this.mode() === 'stream') {
       // ── Streaming path ──────────────────────────────────────────────────
       this.chat.isStreaming.set(true);
       this.chat.addMessage('assistant', '');       // placeholder
@@ -60,7 +59,7 @@ export class ChatComponent implements AfterViewChecked {
         (err)   => { this.errorMsg.set(err); this.chat.isStreaming.set(false); },
       );
 
-    } else if (this.useMulti()) {
+    } else if (this.mode() === 'multi') {
       // ── Multi-turn path ─────────────────────────────────────────────────
       this.chat.isLoading.set(true);
       this.chat.multiTurnChat(mdl).subscribe({
@@ -79,7 +78,7 @@ export class ChatComponent implements AfterViewChecked {
   }
 
   onKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Enter') {
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
       event.preventDefault();
       this.send();
     }

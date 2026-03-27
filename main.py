@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from ollama import AsyncClient          # official async client
+from typing import Literal
 import json
 
 app = FastAPI(title="Ollama Chat API")
@@ -70,7 +71,7 @@ async def chat_stream(req: ChatRequest):
 
 # ── Chat (multi-turn) endpoint ─────────────────────────────────────────────────
 class Message(BaseModel):
-    role: str       # "user" | "assistant"
+    role: Literal["user", "assistant"]
     content: str
 
 class MultiTurnRequest(BaseModel):

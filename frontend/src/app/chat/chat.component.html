@@ -21,12 +21,34 @@
       <label class="sidebar__label">Mode</label>
       <div class="sidebar__toggles">
         <label class="toggle">
-          <input type="checkbox" [ngModel]="useStream()" (ngModelChange)="useStream.set($event)">
+          <input
+            type="radio"
+            name="mode"
+            [ngModel]="mode()"
+            value="stream"
+            (ngModelChange)="mode.set($event)"
+          >
           <span>Streaming</span>
         </label>
         <label class="toggle">
-          <input type="checkbox" [ngModel]="useMulti()" (ngModelChange)="useMulti.set($event)">
+          <input
+            type="radio"
+            name="mode"
+            [ngModel]="mode()"
+            value="multi"
+            (ngModelChange)="mode.set($event)"
+          >
           <span>Multi-turn</span>
+        </label>
+        <label class="toggle">
+          <input
+            type="radio"
+            name="mode"
+            [ngModel]="mode()"
+            value="single"
+            (ngModelChange)="mode.set($event)"
+          >
+          <span>Single-shot</span>
         </label>
       </div>
     </div>
@@ -51,7 +73,7 @@
       @if (chat.messages().length === 0) {
         <div class="chat__empty">
           <p>👋 Ask anything. Model: <strong>{{ model() }}</strong></p>
-          <p class="hint">Ctrl + Enter to send</p>
+          <p class="hint">Ctrl/Cmd + Enter to send</p>
         </div>
       }
 
@@ -90,7 +112,7 @@
       <textarea
         class="chat__textarea"
         rows="3"
-        placeholder="Type a message… (Ctrl+Enter to send)"
+        placeholder="Type a message… (Ctrl/Cmd+Enter to send)"
         [ngModel]="prompt()"
         (ngModelChange)="prompt.set($event)"
         (keydown)="onKeydown($event)"
