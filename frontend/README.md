@@ -40,8 +40,12 @@ npm install
 ollama serve
 ollama pull llama3
 
-# 3. Start FastAPI backend (from /backend folder)
+# 3. Start FastAPI backend
 pip install fastapi uvicorn ollama
+# from the repo root
+uvicorn main:app --reload --port 8000
+
+# or from the /backend folder
 uvicorn main:app --reload --port 8000
 
 # 4. Start Angular dev server
