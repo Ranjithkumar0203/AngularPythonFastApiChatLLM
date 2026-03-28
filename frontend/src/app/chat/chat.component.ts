@@ -26,6 +26,9 @@ export class ChatComponent implements AfterViewChecked {
   model      = signal('qwen2.5:7b');
   mode       = signal<'stream' | 'multi' | 'single'>('stream');
   errorMsg   = signal('');
+  uploadName = signal('');
+  uploadMsg  = signal('');
+  isUploading = signal(false);
 
   // Computed helpers exposed to template
   canSend = computed(() =>
@@ -82,6 +85,29 @@ export class ChatComponent implements AfterViewChecked {
       event.preventDefault();
       this.send();
     }
+  }
+
+  onFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    this.uploadName.set(file.name);
+    this.uploadMsg.set('');
+    this.isUploading.set(true);
+
+    this.chat.uploadDocument(file).subscribe({
+      next: () => {
+        this.uploadMsg.set(`Indexed ${file.name}`);
+        this.isUploading.set(false);
+        input.value = '';
+      },
+      error: (err) => {
+        this.uploadMsg.set(err.error?.detail ?? err.message ?? 'Upload failed');
+        this.isUploading.set(false);
+        input.value = '';
+      },
+    });
   }
 
   trackByIndex(index: number): number { return index; }

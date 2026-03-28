@@ -9,6 +9,7 @@ DATABASE_URL = os.getenv(
     "postgresql+asyncpg://postgres:postgres@localhost:5432/ollama_chat",
 )
 
+
 engine = create_async_engine(DATABASE_URL, future=True, echo=False)
 AsyncSessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False, class_=AsyncSession)
 

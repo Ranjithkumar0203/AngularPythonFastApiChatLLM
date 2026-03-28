@@ -1,8 +1,7 @@
-import { Injectable, signal, computed } from '@angular/core';
-import { HttpClient }                   from '@angular/common/http';
-import { Observable }                   from 'rxjs';
+import { Injectable, computed, signal } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Observable, from, switchMap } from 'rxjs';
 
-// ── Types ──────────────────────────────────────────────────────────────────────
 export type Role = 'user' | 'assistant';
 
 export interface Message {
@@ -11,27 +10,37 @@ export interface Message {
   timestamp: Date;
 }
 
-export interface ChatRequest  { prompt: string; model: string; }
-export interface ChatResponse { response: string; model: string; }
+export interface ChatRequest {
+  prompt: string;
+  model: string;
+}
+
+export interface ChatResponse {
+  response: string;
+  model: string;
+}
 
 export interface HealthResponse {
   status: 'ok' | 'ollama_unreachable';
   models: string[];
 }
 
-// ── Service ────────────────────────────────────────────────────────────────────
+export interface RagIngestResponse {
+  status: string;
+  source: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ChatService {
   private readonly apiUrl = 'http://localhost:8000';
+  private readonly wsUrl = this.apiUrl.replace(/^http/, 'ws');
 
-  // ── Angular 20 Signals for reactive state ──────────────────────────────────
-  readonly messages   = signal<Message[]>([]);
-  readonly isLoading  = signal(false);
+  readonly messages = signal<Message[]>([]);
+  readonly isLoading = signal(false);
   readonly isStreaming = signal(false);
-  readonly models     = signal<string[]>(['llama3']);
-  readonly ollamaOk   = signal(true);
+  readonly models = signal<string[]>(['llama3']);
+  readonly ollamaOk = signal(true);
 
-  // Computed: last message from assistant
   readonly lastReply = computed(() => {
     const msgs = this.messages();
     return msgs.findLast((m: Message) => m.role === 'assistant')?.content ?? '';
@@ -41,7 +50,6 @@ export class ChatService {
     this.checkHealth();
   }
 
-  // ── Health check ────────────────────────────────────────────────────────────
   checkHealth(): void {
     this.http.get<HealthResponse>(`${this.apiUrl}/health`).subscribe({
       next: (res) => {
@@ -52,12 +60,10 @@ export class ChatService {
     });
   }
 
-  // ── Non-streaming: full response via HttpClient ─────────────────────────────
   sendMessage(prompt: string, model: string): Observable<ChatResponse> {
     return this.http.post<ChatResponse>(`${this.apiUrl}/chat`, { prompt, model });
   }
 
-  // ── Streaming: SSE via native fetch + ReadableStream ────────────────────────
   streamMessage(
     prompt: string,
     model: string,
@@ -65,74 +71,90 @@ export class ChatService {
     onDone: () => void,
     onError: (err: string) => void,
   ): void {
-    fetch(`${this.apiUrl}/chat/stream`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, model }),
-    })
-      .then(async (res) => {
-        if (!res.ok || !res.body) {
-          onError(`HTTP ${res.status}`);
+    const socket = new WebSocket(`${this.wsUrl}/chat/ws`);
+    let finished = false;
+
+    socket.onopen = () => {
+      socket.send(JSON.stringify({ prompt, model }));
+    };
+
+    socket.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data) as { token?: string; error?: string; done?: boolean };
+
+        if (data.error) {
+          finished = true;
+          onError(data.error);
+          socket.close();
           return;
         }
-        const reader  = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
 
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) {
-            // Flush any remaining complete event when stream closes.
-            if (buffer.trim().length > 0) {
-              const frame = buffer.trim();
-              if (frame.startsWith('data: ')) {
-                const data = JSON.parse(frame.slice(6)) as { token?: string; error?: string };
-                if (data.error) { onError(data.error); return; }
-                if (data.token) onToken(data.token);
-              }
-            }
-            onDone();
-            break;
-          }
-
-          buffer += decoder.decode(value, { stream: true });
-          const frames = buffer.split('\n\n');
-          buffer = frames.pop() ?? '';
-
-          for (const frame of frames) {
-            const line = frame.trim();
-            if (!line.startsWith('data: ')) continue;
-            const data = JSON.parse(line.slice(6)) as { token?: string; error?: string };
-            if (data.error) { onError(data.error); return; }
-            if (data.token) onToken(data.token);
-          }
+        if (data.token) {
+          onToken(data.token);
         }
-      })
-      .catch(err => onError(String(err)));
+
+        if (data.done) {
+          finished = true;
+          onDone();
+          socket.close();
+        }
+      } catch (err) {
+        finished = true;
+        onError(String(err));
+        socket.close();
+      }
+    };
+
+    socket.onerror = () => {
+      if (!finished) {
+        finished = true;
+        onError('WebSocket connection failed');
+      }
+    };
+
+    socket.onclose = () => {
+      if (!finished) {
+        finished = true;
+        onDone();
+      }
+    };
   }
 
-  // ── Multi-turn chat ─────────────────────────────────────────────────────────
   multiTurnChat(model: string): Observable<{ response: string; model: string }> {
-    const messages = this.messages().map(m => ({
+    const messages = this.messages().map((m) => ({
       role: m.role,
       content: m.content,
     }));
+
     return this.http.post<{ response: string; model: string }>(
       `${this.apiUrl}/chat/multi`,
       { messages, model },
     );
   }
 
-  // ── Helpers ─────────────────────────────────────────────────────────────────
+  uploadDocument(file: File, embeddingModel = 'nomic-embed-text'): Observable<RagIngestResponse> {
+    return from(file.text()).pipe(
+      switchMap((content) => this.http.post<RagIngestResponse>(`${this.apiUrl}/rag/ingest`, {
+        source: file.name,
+        content,
+        metadata: {
+          size: file.size,
+          type: file.type || 'text/plain',
+        },
+        embedding_model: embeddingModel,
+      })),
+    );
+  }
+
   addMessage(role: Role, content: string): void {
-    this.messages.update(msgs => [
+    this.messages.update((msgs) => [
       ...msgs,
       { role, content, timestamp: new Date() },
     ]);
   }
 
   updateLastAssistantMessage(append: string): void {
-    this.messages.update(msgs => {
+    this.messages.update((msgs) => {
       const copy = [...msgs];
       const last = copy.findLastIndex((m: Message) => m.role === 'assistant');
       if (last !== -1) copy[last] = { ...copy[last], content: copy[last].content + append };

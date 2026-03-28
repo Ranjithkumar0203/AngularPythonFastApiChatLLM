@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from ollama import AsyncClient
+from ollama._types import ResponseError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,13 +28,19 @@ async def ingest_document(req: RagIngestRequest, db: AsyncSession = Depends(get_
         row = RagChunk(
             source=req.source,
             content=req.content,
+            embedding_model=req.embedding_model,
             embedding=vector,
             meta=req.metadata,
         )
         db.add(row)
         await db.commit()
         return {"status": "indexed", "source": req.source}
+    except ResponseError as e:
+        await db.rollback()
+        status_code = 404 if e.status_code == 404 else 502
+        raise HTTPException(status_code=status_code, detail=str(e))
     except Exception as e:
+        await db.rollback()
         raise HTTPException(status_code=502, detail=str(e))
 
 
@@ -43,10 +50,15 @@ async def rag_query(req: RagQueryRequest, db: AsyncSession = Depends(get_db_sess
         emb = await ollama.embeddings(model=req.embedding_model, prompt=req.question)
         query_embedding = emb.embedding
 
-        result = await db.execute(select(RagChunk))
+        result = await db.execute(
+            select(RagChunk).where(RagChunk.embedding_model == req.embedding_model)
+        )
         rows = result.scalars().all()
         if not rows:
-            raise HTTPException(status_code=404, detail="No indexed documents available")
+            raise HTTPException(
+                status_code=404,
+                detail=f"No indexed documents available for embedding model '{req.embedding_model}'",
+            )
 
         candidates = [
             Candidate(
@@ -80,5 +92,8 @@ async def rag_query(req: RagQueryRequest, db: AsyncSession = Depends(get_db_sess
         )
     except HTTPException:
         raise
+    except ResponseError as e:
+        status_code = 404 if e.status_code == 404 else 502
+        raise HTTPException(status_code=status_code, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))

@@ -53,6 +53,26 @@
       </div>
     </div>
 
+    <div class="sidebar__section sidebar__section--upload">
+      <label class="sidebar__label">Knowledge Upload</label>
+      <label class="sidebar__upload">
+        <input
+          type="file"
+          accept=".txt,.md,.json,.csv,.log"
+          (change)="onFileSelected($event)"
+        >
+        <span class="sidebar__upload-button">
+          {{ isUploading() ? 'Uploading...' : 'Upload file' }}
+        </span>
+        <span class="sidebar__upload-hint">
+          {{ uploadName() || 'Text files are indexed for RAG answers.' }}
+        </span>
+      </label>
+      @if (uploadMsg()) {
+        <p class="sidebar__upload-status">{{ uploadMsg() }}</p>
+      }
+    </div>
+
     <!-- Ollama status -->
     <div class="sidebar__status" [class.sidebar__status--ok]="chat.ollamaOk()"
                                   [class.sidebar__status--err]="!chat.ollamaOk()">

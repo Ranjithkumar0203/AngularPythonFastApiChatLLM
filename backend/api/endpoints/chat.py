@@ -1,17 +1,16 @@
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from ollama import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 try:
     from ..schemas import ChatRequest, ChatResponse, MultiTurnRequest
-    from ...db.database import get_db_session
+    from ...db.database import AsyncSessionLocal, get_db_session
     from ...db.models import ChatMessage
 except ImportError:
     from api.schemas import ChatRequest, ChatResponse, MultiTurnRequest
-    from db.database import get_db_session
+    from db.database import AsyncSessionLocal, get_db_session
     from db.models import ChatMessage
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -50,10 +49,21 @@ async def chat(req: ChatRequest):
         raise HTTPException(status_code=502, detail=str(e))
 
 
-@router.post("/stream")
-async def chat_stream(req: ChatRequest, db: AsyncSession = Depends(get_db_session)):
-    async def token_generator():
+@router.websocket("/ws")
+async def chat_stream_ws(websocket: WebSocket):
+    await websocket.accept()
+
+    try:
+        payload = await websocket.receive_json()
+        req = ChatRequest(**payload)
+    except Exception as exc:
+        await websocket.send_text(json.dumps({"error": f"Invalid request: {exc}"}))
+        await websocket.close(code=1003)
+        return
+
+    async with AsyncSessionLocal() as db:
         assistant_tokens: list[str] = []
+
         try:
             await save_message(
                 db,
@@ -79,7 +89,7 @@ async def chat_stream(req: ChatRequest, db: AsyncSession = Depends(get_db_sessio
                 token = chunk.response
                 if token:
                     assistant_tokens.append(token)
-                    yield f"data: {json.dumps({'token': token})}\n\n"
+                    await websocket.send_text(json.dumps({"token": token}))
 
                 if chunk.done:
                     break
@@ -93,10 +103,14 @@ async def chat_stream(req: ChatRequest, db: AsyncSession = Depends(get_db_sessio
                     content=full_assistant_response,
                     model=req.model,
                 )
-        except Exception as e:
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
-    return StreamingResponse(token_generator(), media_type="text/event-stream")
+            await websocket.send_text(json.dumps({"done": True}))
+        except WebSocketDisconnect:
+            return
+        except Exception as exc:
+            await websocket.send_text(json.dumps({"error": str(exc)}))
+        finally:
+            await websocket.close()
 
 
 @router.post("/multi", response_model=ChatResponse)
