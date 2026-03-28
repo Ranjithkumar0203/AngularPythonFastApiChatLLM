@@ -1,6 +1,6 @@
 import { Injectable, computed, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, from, switchMap } from 'rxjs';
+import { Observable, catchError, from, switchMap, throwError } from 'rxjs';
 
 export type Role = 'user' | 'assistant';
 
@@ -133,16 +133,40 @@ export class ChatService {
   }
 
   uploadDocument(file: File, embeddingModel = 'nomic-embed-text'): Observable<RagIngestResponse> {
+    const payload = {
+      source: file.name,
+      metadata: {
+        size: file.size,
+        type: file.type || 'text/plain',
+      },
+      embedding_model: embeddingModel,
+    };
+
+    const postIngest = (path: string, content: string) => this.http.post<RagIngestResponse>(
+      `${this.apiUrl}${path}`,
+      { ...payload, content },
+    );
+
     return from(file.text()).pipe(
-      switchMap((content) => this.http.post<RagIngestResponse>(`${this.apiUrl}/rag/ingest`, {
-        source: file.name,
-        content,
-        metadata: {
-          size: file.size,
-          type: file.type || 'text/plain',
-        },
-        embedding_model: embeddingModel,
-      })),
+      switchMap((content) =>
+        postIngest('/rag/ingest', content).pipe(
+          catchError((err) => {
+            // Backward compatibility: some backends expose ingest without /rag or under /api.
+            if (err.status === 404) {
+              return postIngest('/ingest', content).pipe(
+                catchError((fallbackErr) => {
+                  if (fallbackErr.status === 404) {
+                    return postIngest('/api/rag/ingest', content);
+                  }
+                  return throwError(() => fallbackErr);
+                }),
+              );
+            }
+
+            return throwError(() => err);
+          }),
+        ),
+      ),
     );
   }
 
