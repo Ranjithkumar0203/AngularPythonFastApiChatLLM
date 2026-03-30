@@ -1,6 +1,6 @@
 import { Injectable, computed, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, from, switchMap } from 'rxjs';
+import { Observable, from, switchMap, throwError } from 'rxjs';
 
 export type Role = 'user' | 'assistant';
 
@@ -28,6 +28,13 @@ export interface HealthResponse {
 export interface RagIngestResponse {
   status: string;
   source: string;
+  chunks?: number;
+}
+
+export interface RagQueryResponse {
+  response: string;
+  model: string;
+  contexts: Array<{ source: string; score: number }>;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -60,8 +67,31 @@ export class ChatService {
     });
   }
 
+  private toBase64(buffer: ArrayBuffer): string {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    const chunkSize = 0x8000;
+
+    for (let index = 0; index < bytes.length; index += chunkSize) {
+      const chunk = bytes.subarray(index, index + chunkSize);
+      binary += String.fromCharCode(...chunk);
+    }
+
+    return btoa(binary);
+  }
+
   sendMessage(prompt: string, model: string): Observable<ChatResponse> {
     return this.http.post<ChatResponse>(`${this.apiUrl}/chat`, { prompt, model });
+  }
+
+  queryKnowledge(question: string, model: string): Observable<RagQueryResponse> {
+    return this.http.post<RagQueryResponse>(`${this.apiUrl}/rag/query`, {
+      question,
+      model,
+      embedding_model: 'all-minilm',
+      top_k: 4,
+      min_score: 0.2,
+    });
   }
 
   streamMessage(
@@ -132,16 +162,37 @@ export class ChatService {
     );
   }
 
-  uploadDocument(file: File, embeddingModel = 'nomic-embed-text'): Observable<RagIngestResponse> {
+  uploadDocument(file: File): Observable<RagIngestResponse> {
+    const extension = file.name.includes('.') ? file.name.split('.').pop()?.toLowerCase() ?? '' : '';
+    const allowedExtensions = new Set(['txt', 'md', 'json', 'csv', 'log', 'pdf']);
+    if (!allowedExtensions.has(extension)) {
+      return throwError(() => new Error(
+        'Supported files: .txt, .md, .json, .csv, .log, .pdf',
+      ));
+    }
+
+    const payload = {
+      source: file.name,
+      metadata: {
+        size: file.size,
+        type: file.type || 'text/plain',
+      },
+    };
+
+    if (extension === 'pdf') {
+      return from(file.arrayBuffer()).pipe(
+        switchMap((buffer) => this.http.post<RagIngestResponse>(`${this.apiUrl}/rag/ingest`, {
+          ...payload,
+          content: '',
+          content_base64: this.toBase64(buffer),
+        })),
+      );
+    }
+
     return from(file.text()).pipe(
       switchMap((content) => this.http.post<RagIngestResponse>(`${this.apiUrl}/rag/ingest`, {
-        source: file.name,
+        ...payload,
         content,
-        metadata: {
-          size: file.size,
-          type: file.type || 'text/plain',
-        },
-        embedding_model: embeddingModel,
       })),
     );
   }

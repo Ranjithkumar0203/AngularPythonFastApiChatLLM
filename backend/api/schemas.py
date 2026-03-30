@@ -27,16 +27,18 @@ class MultiTurnRequest(BaseModel):
 
 class RagIngestRequest(BaseModel):
     source: str
-    content: str
+    content: str = ""
+    content_base64: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
-    embedding_model: str = "nomic-embed-text"
+    embedding_model: str = "all-minilm"
 
 
 class RagQueryRequest(BaseModel):
     question: str
     model: str = "qwen2.5:7b"
-    embedding_model: str = "nomic-embed-text"
+    embedding_model: str = "all-minilm"
     top_k: int = 4
+    min_score: float = 0.2
 
 
 class RagQueryResponse(BaseModel):

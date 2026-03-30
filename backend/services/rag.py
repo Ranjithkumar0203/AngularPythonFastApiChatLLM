@@ -13,6 +13,81 @@ class Candidate:
     embedding: list[float]
 
 
+def chunk_text(text: str, *, chunk_size: int = 1200, overlap: int = 150) -> list[str]:
+    normalized = text.replace("\r\n", "\n").strip()
+    if not normalized:
+        return []
+
+    chunks: list[str] = []
+    start = 0
+    text_length = len(normalized)
+
+    while start < text_length:
+        end = min(start + chunk_size, text_length)
+        if end < text_length:
+            split_at = normalized.rfind("\n\n", start, end)
+            if split_at <= start:
+                split_at = normalized.rfind("\n", start, end)
+            if split_at <= start:
+                split_at = normalized.rfind(" ", start, end)
+            if split_at > start:
+                end = split_at
+
+        chunk = normalized[start:end].strip()
+        if chunk:
+            chunks.append(chunk)
+
+        if end >= text_length:
+            break
+
+        start = max(end - overlap, start + 1)
+
+    return chunks
+
+
+def split_chunk(chunk: str, *, max_length: int, overlap: int = 100) -> list[str]:
+    normalized = chunk.strip()
+    if not normalized:
+        return []
+
+    if len(normalized) <= max_length:
+        return [normalized]
+
+    if max_length <= overlap:
+        overlap = max(0, max_length // 5)
+
+    pieces: list[str] = []
+    start = 0
+    text_length = len(normalized)
+
+    while start < text_length:
+        end = min(start + max_length, text_length)
+        if end < text_length:
+            split_at = normalized.rfind("\n\n", start, end)
+            if split_at <= start:
+                split_at = normalized.rfind("\n", start, end)
+            if split_at <= start:
+                split_at = normalized.rfind(" ", start, end)
+            if split_at > start:
+                end = split_at
+
+        piece = normalized[start:end].strip()
+        if piece:
+            pieces.append(piece)
+
+        if end >= text_length:
+            break
+
+        start = max(end - overlap, start + 1)
+
+    return pieces
+
+
+def is_context_length_error(message: str) -> bool:
+    normalized = message.lower()
+    return "context length" in normalized or "input length exceeds" in normalized
+
+
 def cosine_similarity(a: list[float], b: list[float]) -> float:
     if not a or not b:
         return 0.0
