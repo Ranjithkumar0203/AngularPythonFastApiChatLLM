@@ -48,7 +48,7 @@
             value="single"
             (ngModelChange)="mode.set($event)"
           >
-          <span>Single-shot</span>
+          <span>RAG Query</span>
         </label>
       </div>
     </div>
@@ -58,14 +58,14 @@
       <label class="sidebar__upload">
         <input
           type="file"
-          accept=".txt,.md,.json,.csv,.log"
+          accept=".txt,.md,.json,.csv,.log,.pdf"
           (change)="onFileSelected($event)"
         >
         <span class="sidebar__upload-button">
           {{ isUploading() ? 'Uploading...' : 'Upload file' }}
         </span>
         <span class="sidebar__upload-hint">
-          {{ uploadName() || 'Text files are indexed for RAG answers.' }}
+          {{ uploadName() || 'Text files and PDFs are indexed for RAG answers.' }}
         </span>
       </label>
       @if (uploadMsg()) {
@@ -93,7 +93,7 @@
       @if (chat.messages().length === 0) {
         <div class="chat__empty">
           <p>👋 Ask anything. Model: <strong>{{ model() }}</strong></p>
-          <p class="hint">Ctrl/Cmd + Enter to send</p>
+          <p class="hint">Upload a file, then ask a question here. Ctrl/Cmd + Enter to send.</p>
         </div>
       }
 

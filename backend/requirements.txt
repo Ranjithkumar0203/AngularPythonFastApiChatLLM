@@ -24,3 +24,4 @@ websockets==16.0
 SQLAlchemy==2.0.44
 asyncpg==0.31.0
 pgvector==0.3.6
+pypdf==6.1.1

@@ -24,7 +24,7 @@ export class ChatComponent implements AfterViewChecked {
   // ── Local UI signals ───────────────────────────────────────────────────────
   prompt     = signal('');
   model      = signal('qwen2.5:7b');
-  mode       = signal<'stream' | 'multi' | 'single'>('stream');
+  mode       = signal<'stream' | 'multi' | 'single'>('single');
   errorMsg   = signal('');
   uploadName = signal('');
   uploadMsg  = signal('');
@@ -73,9 +73,12 @@ export class ChatComponent implements AfterViewChecked {
     } else {
       // ── Single-shot path ────────────────────────────────────────────────
       this.chat.isLoading.set(true);
-      this.chat.sendMessage(text, mdl).subscribe({
+      this.chat.queryKnowledge(text, mdl).subscribe({
         next:  (res) => { this.chat.addMessage('assistant', res.response); this.chat.isLoading.set(false); },
-        error: (err) => { this.errorMsg.set(err.message); this.chat.isLoading.set(false); },
+        error: (err) => {
+          this.errorMsg.set(err.error?.detail ?? err.message ?? 'RAG query failed');
+          this.chat.isLoading.set(false);
+        },
       });
     }
   }
@@ -97,8 +100,9 @@ export class ChatComponent implements AfterViewChecked {
     this.isUploading.set(true);
 
     this.chat.uploadDocument(file).subscribe({
-      next: () => {
-        this.uploadMsg.set(`Indexed ${file.name}`);
+      next: (res) => {
+        const chunkInfo = res.chunks ? ` (${res.chunks} chunks)` : '';
+        this.uploadMsg.set(`Indexed ${file.name}${chunkInfo}`);
         this.isUploading.set(false);
         input.value = '';
       },
